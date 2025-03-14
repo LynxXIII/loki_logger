@@ -202,35 +202,49 @@ func (l *LokiLogger) sendLogs(logData *LokiStream) {
 		l.url.Path, addr, l.cfg.AccessToken, buf.Len(), buf.String(),
 	)
 
-	// Check if the connection is alive and re-establish if needed.
-	if err := l.checkConn(); err != nil {
-		log.Printf("Error loki checkConn: %v", err)
-		return
+	var response *bufio.Reader
+
+	for i := range l.cfg.RetryCount {
+		if i > 0 {
+			time.Sleep(time.Duration(1<<i) * time.Second)
+		}
+
+		// Check if the connection is alive and re-establish if needed.
+		if err := l.checkConn(); err != nil {
+			log.Printf("Error loki checkConn: %v", err)
+			continue
+		}
+
+		// Send the HTTP request to the Loki API server.
+		if _, err := l.conn.Write([]byte(request)); err != nil {
+			log.Printf("Error loki send request: %v", err)
+			continue
+		}
+
+		// Read the Loki API server's response.
+		response = bufio.NewReader(l.conn)
+
+		strStatus, err := response.ReadString('\n')
+		if err != nil {
+			log.Printf("Error loki receive status: %v", err)
+			continue
+		}
+
+		// Read status response.
+		status := strings.Split(strStatus, " ")
+		if code, err := strconv.Atoi(status[1]); err != nil {
+			log.Printf("Error loki parse code: %v", err)
+		} else if code < 200 || code >= 300 {
+			log.Printf("Error loki code is: %d", code)
+		} else {
+			fmt.Println("Logs sent")
+			return
+		}
+
+		response = nil
 	}
 
-	// Send the HTTP request to the Loki API server.
-	if _, err := l.conn.Write([]byte(request)); err != nil {
-		log.Printf("Error loki send request: %v", err)
-		return
-	}
-
-	// Read the Loki API server's response.
-	response := bufio.NewReader(l.conn)
-
-	strStatus, err := response.ReadString('\n')
-	if err != nil {
-		log.Printf("Error loki receive status: %v", err)
-		return
-	}
-
-	// Read status response.
-	status := strings.Split(strStatus, " ")
-	if code, err := strconv.Atoi(status[1]); err != nil {
-		log.Printf("Error loki parse code: %v", err)
-	} else if code < 200 || code >= 300 {
-		log.Printf("Error loki code is: %d", code)
-	} else {
-		fmt.Println("Logs sent")
+	if response == nil {
 		return
 	}
 
