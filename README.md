@@ -29,7 +29,7 @@ package main
 import (
 	"fmt"
 	"os"
-    "log"
+	"log"
 
 	lokilogger "github.com/LynxXIII/loki_logger"
 )
