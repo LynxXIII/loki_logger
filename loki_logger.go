@@ -121,10 +121,10 @@ func (l *LokiLogger) prepareLogs() {
 	// Iterate through the collected logs.
 	for _, val := range l.logs {
 		// Split each log message into parts.
-		parts := strings.Split(val, " ")
+		parts := strings.SplitN(val, " ", 3)
 
 		// If the log message doesn't have enough parts, treat it as a simple log.
-		if len(parts) < 2 {
+		if len(parts) < 3 {
 			logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(time.Now().UnixNano())), strings.Join(parts, " ")})
 		} else {
 			// Attempt to parse the timestamp.
@@ -135,7 +135,7 @@ func (l *LokiLogger) prepareLogs() {
 				logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(time.Now().UnixNano())), strings.Join(parts, " ")})
 			} else {
 				// Add the timestamp and log message to the data.
-				logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(timestamp.UnixNano())), strings.TrimSpace(strings.Join(parts[2:], " "))})
+				logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(timestamp.UnixNano())), strings.TrimSpace(parts[2])})
 			}
 		}
 	}
