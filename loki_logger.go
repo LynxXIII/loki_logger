@@ -269,7 +269,7 @@ func (l *LokiLogger) Write(p []byte) (n int, err error) {
 
 // Sends the log data to the Loki API server.
 func (l *LokiLogger) Flush() {
-	if l.conn == nil {
+	if l == nil || l.conn == nil {
 		return
 	}
 	l.mu.Lock()
