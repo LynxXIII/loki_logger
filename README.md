@@ -47,7 +47,7 @@ func main() {
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
-    defer loki.Flush() //Sends log buffer before program exits (optional)
+	defer loki.Flush() //Sends log buffer before program exits (optional)
 
 	log.Println("Starting service...")
 	log.Println("This is a sample log message.")
