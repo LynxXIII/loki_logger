@@ -146,6 +146,10 @@ func (l *LokiLogger) prepareLogs() {
 
 func (l *LokiLogger) checkConn() error {
 	if !l.isConnAlive() {
+		if l.conn != nil {
+			l.conn.Close()
+		}
+
 		// Construct the Loki API server address (host:port).
 		addr := net.JoinHostPort(l.url.Hostname(), l.url.Port())
 
@@ -153,7 +157,7 @@ func (l *LokiLogger) checkConn() error {
 		var err error
 
 		if l.url.Scheme == "https" {
-			if conn, err = tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true}); err != nil {
+			if conn, err = tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: false}); err != nil {
 				return err
 			}
 		} else {
@@ -265,6 +269,12 @@ func (l *LokiLogger) sendLogs(logData *LokiStream) {
 
 // Write implements the io.Writer interface and writes data to the Loki API server.
 func (l *LokiLogger) Write(p []byte) (n int, err error) {
+	select {
+	case <-l.ctx.Done():
+		return 0, fmt.Errorf("context cancelled")
+	default:
+	}
+
 	l.resetAutoFlushTimer()
 	// Add the data to the collected logs.
 	l.logs = append(l.logs, string(p))
@@ -278,6 +288,7 @@ func (l *LokiLogger) Write(p []byte) (n int, err error) {
 	}
 
 	fmt.Println(strings.TrimSpace(string(p)))
+
 	return len(p), nil
 }
 
@@ -302,7 +313,9 @@ func (l *LokiLogger) startAutoFlush() {
 				l.logs = l.logs[:0]
 			}
 		case <-l.ctx.Done():
-			l.timer.Stop()
+			if !l.timer.Stop() {
+				<-l.timer.C
+			}
 			return
 		}
 	}
