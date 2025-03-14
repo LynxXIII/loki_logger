@@ -48,7 +48,7 @@ type LokiLogger struct {
 // NewLokiLogger initializes and returns a LokiLogger instance.
 func NewLokiLogger(ctx context.Context, cfg Config) (*LokiLogger, error) {
 	// Configure log flags for standard flags, timestamp, and file short name.
-	log.SetFlags(log.LstdFlags | log.LUTC | log.Lshortfile)
+	log.SetFlags(log.LstdFlags | log.LUTC | log.Lmicroseconds | log.Lshortfile)
 
 	parsedURL, err := url.Parse(cfg.URL)
 	if err != nil {
