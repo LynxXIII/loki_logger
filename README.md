@@ -69,4 +69,4 @@ Comment out the AccessToken line if you're not using access tokens with Loki.  A
 - AccessToken: An access token for authenticated access to Loki (optional).
 
 License
-Apache License Version 2.0.
+The MIT License.
