@@ -68,5 +68,5 @@ Comment out the AccessToken line if you're not using access tokens with Loki.  A
 - BatchSize: The number of logs to collect into a single batch before sending. Optimize this value to achieve the best balance between latency and throughput.
 - AccessToken: An access token for authenticated access to Loki (optional).
 
-License
+**License:**
 The MIT License.
