@@ -76,13 +76,12 @@ func getConn(addr string) (net.Conn, error) {
 }
 
 func isConnectionAlive(conn net.Conn) bool {
-	// Ставим небольшой таймаут на чтение
 	if err := conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
 		log.Println(err)
 		return false
 	}
 	defer func() {
-		err := conn.SetReadDeadline(time.Time{}) // Сбрасываем таймаут обратно
+		err := conn.SetReadDeadline(time.Time{})
 		if err != nil {
 			log.Println(err)
 		}
@@ -91,12 +90,11 @@ func isConnectionAlive(conn net.Conn) bool {
 	buf := make([]byte, 1)
 	_, err := conn.Read(buf)
 
-	// Если ошибка "timeout" — соединение живо, просто данных нет
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return true
 	}
 
-	// Любая другая ошибка (EOF, connection reset) — соединение мертво
+	// Any other error (EOF, connection reset) - the connection is dead
 	return err == nil
 }
 
