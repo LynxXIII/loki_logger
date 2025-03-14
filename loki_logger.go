@@ -14,82 +14,90 @@ import (
 	"time"
 )
 
+// Config Structure holds Loki specific configuration parameters.
 type Config struct {
-	Name        string
-	URL         string
-	BatchSize   int
-	AccessToken string
+	Name        string // Service name used for identification of logs in Loki.
+	URL         string // Loki API server endpoint URL.
+	BatchSize   int    // Number of logs to batch before sending to Loki.
+	AccessToken string // Authentication token for accessing the Loki API.
 }
 
-type LokiWriter struct {
-	mu          sync.Mutex
-	serviceName string
-	addr        string
-	path        string
-	conn        net.Conn
-	logs        []string
-	batchSize   int
-	accessToken string
-}
-
+// LokiLogger Structure represents Loki Log Logger.
 type LokiStream struct {
-	Stream map[string]string `json:"stream"`
-	Values [][2]string       `json:"values"`
+	Stream map[string]string `json:"stream"` // Key-value pairs to identify log stream.
+	Values [][2]string       `json:"values"` // Array of log values with timestamp and log message.
 }
 
-func NewLokiWriter(cfg Config) (*LokiWriter, error) {
+// LokiLogger Structure represents a logger to Loki.
+type LokiLogger struct {
+	mu          sync.Mutex // Mutex to protect concurrent access to LokiLogger resources.
+	serviceName string     // Service name configured in the configuration.
+	addr        string     // Loki API server address.
+	path        string     // Loki API server path.
+	conn        net.Conn   // TCP connection to Loki API server.
+	logs        []string   // Slice to store logs before sending to Loki.
+	batchSize   int        // Number of logs to batch before sending to Loki.
+	accessToken string     // Authentication token for accessing the Loki API.
+}
+
+// NewLokiLogger initializes and returns a LokiLogger instance.
+func NewLokiLogger(cfg Config) (*LokiLogger, error) {
+	// Parse the Loki API server URL.
 	parsedURL, err := url.Parse(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("Error loki parse URL: %v", err)
 	}
 
+	// Construct the Loki API server address (host:port).
 	addr := net.JoinHostPort(parsedURL.Hostname(), parsedURL.Port())
-	conn, err := getConn(addr)
-	if err != nil {
-		return nil, fmt.Errorf("Error loki connection: %v", err)
-	}
 
+	// Configure log flags for standard flags, timestamp, and file short name.
 	log.SetFlags(log.LstdFlags | log.LUTC | log.Lshortfile)
 
-	lw := &LokiWriter{
+	// Create a new LokiLogger instance.
+	lw := &LokiLogger{
 		serviceName: cfg.Name,
 		addr:        addr,
 		path:        parsedURL.Path,
-		conn:        conn,
 		logs:        make([]string, 0, cfg.BatchSize),
 		batchSize:   cfg.BatchSize,
 		accessToken: cfg.AccessToken,
 	}
 
+	// Establish a TCP connection to the Loki API server.
+	if err := lw.checkConn(); err != nil {
+		return nil, fmt.Errorf("Error loki connection: %v", err)
+	}
+
+	// Set the LokiLogger as the output destination for the standard log package.
 	log.SetOutput(lw)
 
 	return lw, nil
 }
 
-func getConn(addr string) (net.Conn, error) {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
+// isConnAlive checks if the TCP connection to Loki is still alive.
+func (w *LokiLogger) isConnAlive() bool {
+	if w.conn == nil {
+		return false
 	}
-
-	return conn, err
-}
-
-func isConnectionAlive(conn net.Conn) bool {
-	if err := conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
+	// Set a read deadline to check for timeout on the connection.
+	if err := w.conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
 		log.Println(err)
 		return false
 	}
+	// Restore the default read deadline after checking.
 	defer func() {
-		err := conn.SetReadDeadline(time.Time{})
+		err := w.conn.SetReadDeadline(time.Time{})
 		if err != nil {
 			log.Println(err)
 		}
 	}()
 
+	// Attempt to read a byte from the connection.
 	buf := make([]byte, 1)
-	_, err := conn.Read(buf)
+	_, err := w.conn.Read(buf)
 
+	// If it's a timeout error, the connection is considered alive.
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return true
 	}
@@ -98,7 +106,9 @@ func isConnectionAlive(conn net.Conn) bool {
 	return err == nil
 }
 
-func (w *LokiWriter) prepareLogs() {
+// prepareLogs prepares the logs for sending to Loki.  Formats logs into Loki-compatible structure.
+func (w *LokiLogger) prepareLogs() {
+	// Create a LokiStream struct to hold the log data.
 	logData := LokiStream{
 		Stream: map[string]string{
 			"service_name": w.serviceName,
@@ -106,33 +116,58 @@ func (w *LokiWriter) prepareLogs() {
 		},
 	}
 
+	// Iterate through the collected logs.
 	for _, val := range w.logs {
+		// Split each log message into parts.
 		parts := strings.Split(val, " ")
+
+		// If the log message doesn't have enough parts, treat it as a simple log.
 		if len(parts) < 2 {
 			logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(time.Now().UnixNano())), strings.Join(parts, " ")})
 		} else {
+			// Attempt to parse the timestamp.
 			timestamp, err := time.ParseInLocation("2006/01/02 15:04:05", parts[0]+" "+parts[1], time.UTC)
+			// If timestamp parsing fails, use the current timestamp.
 			if err != nil {
 				fmt.Println(err)
 				logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(time.Now().UnixNano())), strings.Join(parts, " ")})
 			} else {
+				// Add the timestamp and log message to the data.
 				logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(timestamp.UnixNano())), strings.TrimSpace(strings.Join(parts[2:], " "))})
 			}
 		}
 	}
 
+	// Launch a goroutine to send the logs to Loki in the background.
 	go w.sendLogs(&logData)
 }
 
-func (w *LokiWriter) sendLogs(logData *LokiStream) {
+func (w *LokiLogger) checkConn() error {
+	if !w.isConnAlive() {
+		conn, err := net.Dial("tcp", w.addr)
+		if err != nil {
+			return err
+		}
+
+		w.conn = conn
+	}
+
+	return nil
+}
+
+// sendLogs sends the prepared log data to the Loki API server.
+func (w *LokiLogger) sendLogs(logData *LokiStream) {
+	// Marshal the log data into JSON format.
 	jsonData, err := json.Marshal(map[string][]LokiStream{
 		"streams": {*logData},
 	})
+	// If JSON marshaling fails, log the error and return.
 	if err != nil {
 		log.Printf("Error loki marshalling JSON: %v", err)
 		return
 	}
 
+	// Build the HTTP request string.
 	request := fmt.Sprintf("POST %s HTTP/1.1\r\n"+
 		"Host: %s\r\n"+
 		"Authorization: Bearer %s\r\n"+
@@ -143,22 +178,19 @@ func (w *LokiWriter) sendLogs(logData *LokiStream) {
 		w.path, w.addr, w.accessToken, len(jsonData), string(jsonData),
 	)
 
-	//fmt.Println(request)
-
-	if !isConnectionAlive(w.conn) {
-		conn, err := getConn(w.addr)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		w.conn = conn
+	// Check if the connection is alive and re-establish if needed.
+	if err := w.checkConn(); err != nil {
+		log.Printf("Error loki checkConn: %v", err)
+		return
 	}
 
+	// Send the HTTP request to the Loki API server.
 	if _, err := w.conn.Write([]byte(request)); err != nil {
 		log.Printf("Error loki send request: %v", err)
 		return
 	}
 
+	// Read the Loki API server's response.
 	response := bufio.NewReader(w.conn)
 
 	strStatus, err := response.ReadString('\n')
@@ -167,6 +199,7 @@ func (w *LokiWriter) sendLogs(logData *LokiStream) {
 		return
 	}
 
+	// Read status response.
 	status := strings.Split(strStatus, " ")
 	if code, err := strconv.Atoi(status[1]); err != nil {
 		log.Printf("Error loki parse code: %v", err)
@@ -177,6 +210,7 @@ func (w *LokiWriter) sendLogs(logData *LokiStream) {
 		return
 	}
 
+	// Read and print the rest of the response.
 	for {
 		line, err := response.ReadString('\n')
 		if err == io.EOF {
@@ -191,9 +225,12 @@ func (w *LokiWriter) sendLogs(logData *LokiStream) {
 	}
 }
 
-func (w *LokiWriter) Write(p []byte) (n int, err error) {
+// Write implements the io.Writer interface and writes data to the Loki API server.
+func (w *LokiLogger) Write(p []byte) (n int, err error) {
+	// Add the data to the collected logs.
 	w.logs = append(w.logs, string(p))
 
+	// If the number of logs reaches the batch size, prepare and send them to Loki.
 	if len(w.logs) >= w.batchSize {
 		w.mu.Lock()
 		defer w.mu.Unlock()
@@ -205,7 +242,8 @@ func (w *LokiWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (w *LokiWriter) Flush() {
+// Sends the log data to the Loki API server.
+func (w *LokiLogger) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.prepareLogs()

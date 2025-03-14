@@ -42,7 +42,7 @@ func main() {
 		//AccessToken: "YOUR_LOKI_ACCESS_TOKEN", // Optional if you have an Access Token
 	}
 
-	loki, err := lokilogger.NewLokiWriter(cfg)
+	loki, err := lokilogger.NewLokiLogger(cfg)
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
