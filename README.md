@@ -39,7 +39,7 @@ func main() {
 		Name:       "Service Name",
 		URL:        "http://loki:3100/loki/api/v1/batch", // Replace with your Loki URL
 		BatchSize: 20,
-		AccessToken: "YOUR_LOKI_ACCESS_TOKEN", // Optional if you have an Access Token
+		//AccessToken: "YOUR_LOKI_ACCESS_TOKEN", // Optional if you have an Access Token
 	}
 
 	loki, err := lokilogger.NewLokiWriter(cfg)
@@ -47,7 +47,6 @@ func main() {
 		fmt.Println("Error:", err)
 		os.Exit(1)
 	}
-
     defer loki.Flush() //Sends log buffer before program exits (optional)
 
 	log.Println("Starting service...")
