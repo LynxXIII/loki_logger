@@ -57,7 +57,7 @@ func main() {
 
 **Important Notes:**
 
-Replace "http://lokki:3100/lokki/api/v1/batch" with the actual URL of your Loki instance.
+Replace "http://loki:3100/lokki/api/v1/batch" with the actual URL of your Loki instance.
 Comment out the AccessToken line if you're not using access tokens with Loki.  Access tokens are used for authentication.
 
 **Configuration Parameters (Config struct)**
