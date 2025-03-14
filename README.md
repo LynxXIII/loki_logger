@@ -37,7 +37,7 @@ import (
 func main() {
 	cfg := lokilogger.Config{
 		Name:       "Service Name",
-		URL:        "http://loki:3100/loki/api/v1/batch", // Replace with your Loki URL
+		URL:        "http://loki:3100/loki/api/v1/push", // Replace with your Loki URL
 		BatchSize: 20,
 		//AccessToken: "YOUR_LOKI_ACCESS_TOKEN", // Optional if you have an Access Token
 	}
@@ -57,7 +57,7 @@ func main() {
 
 **Important Notes:**
 
-Replace "http://loki:3100/lokki/api/v1/batch" with the actual URL of your Loki instance.
+Replace "http://loki:3100/loki/api/v1/push" with the actual URL of your Loki instance.
 Comment out the AccessToken line if you're not using access tokens with Loki.  Access tokens are used for authentication.
 
 **Configuration Parameters (Config struct)**
