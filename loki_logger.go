@@ -45,14 +45,14 @@ type LokiLogger struct {
 	timer *time.Timer
 }
 
-// NewLokiLogger initializes and returns a LokiLogger instance.
-func NewLokiLogger(ctx context.Context, cfg Config) (*LokiLogger, error) {
+// Initializes.
+func Init(ctx context.Context, cfg Config) error {
 	// Configure log flags for standard flags, timestamp, and file short name.
 	log.SetFlags(log.LstdFlags | log.LUTC | log.Lmicroseconds | log.Lshortfile)
 
 	parsedURL, err := url.Parse(cfg.URL)
 	if err != nil {
-		return nil, fmt.Errorf("Error loki parse URL: %v", err)
+		return fmt.Errorf("Error loki parse URL: %v", err)
 	}
 
 	// Create a new LokiLogger instance.
@@ -66,15 +66,36 @@ func NewLokiLogger(ctx context.Context, cfg Config) (*LokiLogger, error) {
 
 	// Establish a TCP connection to the Loki API server.
 	if err := l.checkConn(); err != nil {
-		return nil, fmt.Errorf("Error loki connection: %v", err)
+		return fmt.Errorf("Error loki connection: %v", err)
 	}
 
-	go l.startAutoFlush()
+	go l.worker()
 
 	// Set the LokiLogger as the output destination for the standard log package.
 	log.SetOutput(l)
 
-	return l, nil
+	return nil
+}
+
+func (l *LokiLogger) worker() {
+	for {
+		select {
+		case <-l.ctx.Done():
+			l.Shutdown()
+			return
+		case <-l.timer.C:
+			if len(l.logs) > 0 {
+				l.Flush()
+			}
+		}
+	}
+}
+
+func (l *LokiLogger) Shutdown() {
+	if !l.timer.Stop() {
+		<-l.timer.C
+	}
+	l.Flush()
 }
 
 // isConnAlive checks if the TCP connection to Loki is still alive.
@@ -174,6 +195,15 @@ func (l *LokiLogger) checkConn() error {
 
 // sendLogs sends the prepared log data to the Loki API server.
 func (l *LokiLogger) sendLogs(logData *LokiStream) {
+	defer func() {
+		select {
+		case <-l.ctx.Done():
+			if l.conn != nil {
+				l.conn.Close()
+			}
+		default:
+		}
+	}()
 	// Marshal the log data into JSON format.
 	jsonData, err := json.Marshal(map[string][]LokiStream{
 		"streams": {*logData},
@@ -281,10 +311,7 @@ func (l *LokiLogger) Write(p []byte) (n int, err error) {
 
 	// If the number of logs reaches the batch size, prepare and send them to Loki.
 	if len(l.logs) >= l.cfg.BatchSize {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		l.prepareLogs()
-		l.logs = l.logs[:0]
+		l.Flush()
 	}
 
 	fmt.Println(strings.TrimSpace(string(p)))
@@ -294,31 +321,13 @@ func (l *LokiLogger) Write(p []byte) (n int, err error) {
 
 // Sends the log data to the Loki API server.
 func (l *LokiLogger) Flush() {
-	if l == nil || l.conn == nil {
+	if l == nil || l.conn == nil || len(l.logs) == 0 {
 		return
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.prepareLogs()
-}
-
-func (l *LokiLogger) startAutoFlush() {
-	for {
-		select {
-		case <-l.timer.C:
-			if len(l.logs) > 0 {
-				l.mu.Lock()
-				defer l.mu.Unlock()
-				l.prepareLogs()
-				l.logs = l.logs[:0]
-			}
-		case <-l.ctx.Done():
-			if !l.timer.Stop() {
-				<-l.timer.C
-			}
-			return
-		}
-	}
+	l.logs = l.logs[:0]
 }
 
 func (l *LokiLogger) resetAutoFlushTimer() {
