@@ -105,14 +105,14 @@ func (l *LokiLogger) isConnAlive() bool {
 	}
 	// Set a read deadline to check for timeout on the connection.
 	if err := l.conn.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-		log.Println(err)
+		fmt.Println(err)
 		return false
 	}
 	// Restore the default read deadline after checking.
 	defer func() {
 		err := l.conn.SetReadDeadline(time.Time{})
 		if err != nil {
-			log.Println(err)
+			fmt.Println(err)
 		}
 	}()
 
@@ -210,14 +210,14 @@ func (l *LokiLogger) sendLogs(logData *LokiStream) {
 	})
 	// If JSON marshaling fails, log the error and return.
 	if err != nil {
-		log.Printf("Error loki marshalling JSON: %v", err)
+		fmt.Printf("Error loki marshalling JSON: %v", err)
 		return
 	}
 
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	if _, err := gz.Write(jsonData); err != nil {
-		log.Printf("Error loki gzip JSON: %v", err)
+		fmt.Printf("Error loki gzip JSON: %v", err)
 		return
 	}
 	gz.Close()
@@ -245,13 +245,13 @@ func (l *LokiLogger) sendLogs(logData *LokiStream) {
 
 		// Check if the connection is alive and re-establish if needed.
 		if err := l.checkConn(); err != nil {
-			log.Printf("Error loki checkConn: %v", err)
+			fmt.Printf("Error loki checkConn: %v", err)
 			continue
 		}
 
 		// Send the HTTP request to the Loki API server.
 		if _, err := l.conn.Write([]byte(request)); err != nil {
-			log.Printf("Error loki send request: %v", err)
+			fmt.Printf("Error loki send request: %v", err)
 			continue
 		}
 
@@ -260,16 +260,16 @@ func (l *LokiLogger) sendLogs(logData *LokiStream) {
 
 		strStatus, err := response.ReadString('\n')
 		if err != nil {
-			log.Printf("Error loki receive status: %v", err)
+			fmt.Printf("Error loki receive status: %v", err)
 			continue
 		}
 
 		// Read status response.
 		status := strings.Split(strStatus, " ")
 		if code, err := strconv.Atoi(status[1]); err != nil {
-			log.Printf("Error loki parse code: %v", err)
+			fmt.Printf("Error loki parse code: %v", err)
 		} else if code < 200 || code >= 300 {
-			log.Printf("Error loki code is: %d", code)
+			fmt.Printf("Error loki code is: %d", code)
 		} else {
 			fmt.Println("Logs sent")
 			return
@@ -289,7 +289,7 @@ func (l *LokiLogger) sendLogs(logData *LokiStream) {
 			break
 		}
 		if err != nil {
-			log.Printf("Error loki receive response: %v", err)
+			fmt.Printf("Error loki receive response: %v", err)
 			return
 		}
 
