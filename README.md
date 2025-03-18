@@ -63,6 +63,7 @@ func main() {
 
 Replace "http://loki:3100/loki/api/v1/push" with the actual URL of your Loki instance.
 Comment out the AccessToken line if you're not using access tokens with Loki. Access tokens are used for authentication.
+Error level triggers keywords: error, ❌
 
 **Configuration Parameters (Config struct)**
 
