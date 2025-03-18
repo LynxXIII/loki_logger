@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -134,8 +133,6 @@ func (l *LokiLogger) isConnAlive() bool {
 func (l *LokiLogger) prepareLogs() {
 	data := make(map[string][][2]string)
 
-	re := regexp.MustCompile(`\w\.go\:\d+\:\s\w{5}`)
-
 	// Iterate through the collected logs.
 	for _, val := range l.logs {
 		// Split each log message into parts.
@@ -149,25 +146,17 @@ func (l *LokiLogger) prepareLogs() {
 			val = strings.TrimSpace(parts[2])
 		}
 
-		match := re.FindStringSubmatch(val)
-		if len(match) > 0 {
-			switch string(match[0][len(match[0])-5:]) {
-			case "Error":
-				if _, exists := data["error"]; !exists {
-					data["error"] = make([][2]string, 0, l.cfg.BatchSize)
-				}
+		level := "info"
 
-				data["error"] = append(data["error"], [2]string{strconv.Itoa(int(timestamp.UnixNano())), val})
-			}
-
-			continue
+		if strings.Contains(strings.ToLower(val), "error") {
+			level = "error"
 		}
 
-		if _, exists := data["info"]; !exists {
-			data["info"] = make([][2]string, 0, l.cfg.BatchSize)
+		if _, exists := data[level]; !exists {
+			data[level] = make([][2]string, 0, l.cfg.BatchSize)
 		}
 
-		data["info"] = append(data["info"], [2]string{strconv.Itoa(int(timestamp.UnixNano())), val})
+		data[level] = append(data[level], [2]string{strconv.Itoa(int(timestamp.UnixNano())), val})
 	}
 
 	// Launch a goroutine to send the logs to Loki in the background.

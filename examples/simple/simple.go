@@ -61,7 +61,7 @@ func main() {
 
 	log.Println("1. Starting service...")
 	log.Println("2. This is a sample log message.")
-	log.Println("Error: 3. This is a error log message.")
+	log.Println("3. Error: This is a error log message.")
 	log.Println("4. Another log message with more details.")
 
 	<-ctx.Done()
