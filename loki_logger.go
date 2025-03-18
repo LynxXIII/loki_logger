@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,8 +31,8 @@ type Config struct {
 
 // LokiLogger Structure represents Loki Log Logger.
 type LokiStream struct {
-	Stream map[string]string `json:"stream"` // Key-value pairs to identify log stream.
-	Values [][2]string       `json:"values"` // Array of log values with timestamp and log message.
+	Stream map[string]string `json:"stream,omitempty"` // Key-value pairs to identify log stream.
+	Values [][2]string       `json:"values,omitempty"` // Array of log values with timestamp and log message.
 }
 
 // LokiLogger Structure represents a logger to Loki.
@@ -131,38 +132,46 @@ func (l *LokiLogger) isConnAlive() bool {
 
 // prepareLogs prepares the logs for sending to Loki.  Formats logs into Loki-compatible structure.
 func (l *LokiLogger) prepareLogs() {
-	// Create a LokiStream struct to hold the log data.
-	logData := LokiStream{
-		Stream: map[string]string{
-			"service_name": l.cfg.Name,
-			"level":        "info",
-		},
-	}
+	data := make(map[string][][2]string)
+
+	re := regexp.MustCompile(`\w\.go\:\d+\:\s\w{5}`)
 
 	// Iterate through the collected logs.
 	for _, val := range l.logs {
 		// Split each log message into parts.
 		parts := strings.SplitN(val, " ", 3)
 
-		// If the log message doesn't have enough parts, treat it as a simple log.
-		if len(parts) < 3 {
-			logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(time.Now().UnixNano())), strings.Join(parts, " ")})
+		timestamp := time.Now()
+		if t, err := time.ParseInLocation("2006/01/02 15:04:05", parts[0]+" "+parts[1], time.UTC); err != nil {
+			log.Println(err)
 		} else {
-			// Attempt to parse the timestamp.
-			timestamp, err := time.ParseInLocation("2006/01/02 15:04:05", parts[0]+" "+parts[1], time.UTC)
-			// If timestamp parsing fails, use the current timestamp.
-			if err != nil {
-				log.Println(err)
-				logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(time.Now().UnixNano())), strings.Join(parts, " ")})
-			} else {
-				// Add the timestamp and log message to the data.
-				logData.Values = append(logData.Values, [2]string{strconv.Itoa(int(timestamp.UnixNano())), strings.TrimSpace(parts[2])})
-			}
+			timestamp = t
+			val = strings.TrimSpace(parts[2])
 		}
+
+		match := re.FindStringSubmatch(val)
+		if len(match) > 0 {
+			switch string(match[0][len(match[0])-5:]) {
+			case "Error":
+				if _, exists := data["error"]; !exists {
+					data["error"] = make([][2]string, 0, l.cfg.BatchSize)
+				}
+
+				data["error"] = append(data["error"], [2]string{strconv.Itoa(int(timestamp.UnixNano())), val})
+			}
+
+			continue
+		}
+
+		if _, exists := data["info"]; !exists {
+			data["info"] = make([][2]string, 0, l.cfg.BatchSize)
+		}
+
+		data["info"] = append(data["info"], [2]string{strconv.Itoa(int(timestamp.UnixNano())), val})
 	}
 
 	// Launch a goroutine to send the logs to Loki in the background.
-	go l.sendLogs(&logData)
+	go l.sendLogs(data)
 }
 
 func (l *LokiLogger) checkConn() error {
@@ -194,7 +203,7 @@ func (l *LokiLogger) checkConn() error {
 }
 
 // sendLogs sends the prepared log data to the Loki API server.
-func (l *LokiLogger) sendLogs(logData *LokiStream) {
+func (l *LokiLogger) sendLogs(data map[string][][2]string) {
 	defer func() {
 		select {
 		case <-l.ctx.Done():
@@ -204,10 +213,21 @@ func (l *LokiLogger) sendLogs(logData *LokiStream) {
 		default:
 		}
 	}()
+
+	streams := make(map[string][]LokiStream)
+	streams["streams"] = make([]LokiStream, len(data))
+	for k, v := range data {
+		streams["streams"] = append(streams["streams"], LokiStream{
+			Stream: map[string]string{
+				"service_name": l.cfg.Name,
+				"level":        k,
+			},
+			Values: v,
+		})
+	}
+
 	// Marshal the log data into JSON format.
-	jsonData, err := json.Marshal(map[string][]LokiStream{
-		"streams": {*logData},
-	})
+	jsonData, err := json.Marshal(streams)
 	// If JSON marshaling fails, log the error and return.
 	if err != nil {
 		log.Printf("Error loki marshalling JSON: %v", err)

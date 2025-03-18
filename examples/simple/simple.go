@@ -39,7 +39,11 @@ func main() {
 	defer cancel()
 
 	http.HandleFunc("/loki/api/v1/push", handler)
-	go http.ListenAndServe(":3100", nil)
+	go func() {
+		if err := http.ListenAndServe(":3100", nil); err != nil {
+			log.Fatalln(err)
+		}
+	}()
 
 	cfg := lokilogger.Config{
 		Name:          "Service Name",
@@ -57,7 +61,8 @@ func main() {
 
 	log.Println("1. Starting service...")
 	log.Println("2. This is a sample log message.")
-	log.Println("3. Another log message with more details.")
+	log.Println("Error: 3. This is a error log message.")
+	log.Println("4. Another log message with more details.")
 
 	<-ctx.Done()
 	log.Println("Exit")
