@@ -148,7 +148,7 @@ func (l *LokiLogger) prepareLogs() {
 
 		level := "info"
 
-		if strings.Contains(strings.ToLower(val), "error") {
+		if strings.Contains(strings.ToLower(val), "error") || strings.Contains(val, "❌") {
 			level = "error"
 		}
 
