@@ -20,11 +20,11 @@ import (
 
 // Config Structure holds Loki specific configuration parameters.
 type Config struct {
+	BatchSize     int // Number of logs to batch before sending to Loki.
+	FlushInterval time.Duration
 	Name          string // Service name used for identification of logs in Loki.
 	URL           string // Loki API server endpoint URL.
-	BatchSize     int    // Number of logs to batch before sending to Loki.
 	AccessToken   string // Authentication token for accessing the Loki API.
-	FlushInterval time.Duration
 	RetryCount    int
 }
 
@@ -39,8 +39,8 @@ type LokiLogger struct {
 	ctx   context.Context
 	mu    sync.Mutex // Mutex to protect concurrent access to LokiLogger resources.
 	conn  net.Conn   // TCP connection to Loki API server.
-	logs  []string   // Slice to store logs before sending to Loki.
 	cfg   Config
+	logs  []string // Slice to store logs before sending to Loki.
 	url   *url.URL
 	timer *time.Timer
 }
@@ -81,7 +81,13 @@ func (l *LokiLogger) worker() {
 	for {
 		select {
 		case <-l.ctx.Done():
-			l.Shutdown()
+			if !l.timer.Stop() {
+				select {
+				case <-l.timer.C:
+				default:
+				}
+			}
+			l.Flush()
 			return
 		case <-l.timer.C:
 			if len(l.logs) > 0 {
@@ -89,13 +95,6 @@ func (l *LokiLogger) worker() {
 			}
 		}
 	}
-}
-
-func (l *LokiLogger) Shutdown() {
-	if !l.timer.Stop() {
-		<-l.timer.C
-	}
-	l.Flush()
 }
 
 // isConnAlive checks if the TCP connection to Loki is still alive.
