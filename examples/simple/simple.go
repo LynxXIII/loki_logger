@@ -1,7 +1,6 @@
 package main
 
 import (
-	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -14,16 +13,7 @@ import (
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	var gz *gzip.Reader
-	gz, err := gzip.NewReader(r.Body)
-	if err != nil {
-		fmt.Println("Ошибка при расжатии gzip:", err)
-		http.Error(w, "Ошибка сервера", http.StatusInternalServerError)
-		return
-	}
-	defer gz.Close()
-
-	body, err := io.ReadAll(gz)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Println("Ошибка при чтении тела запроса:", err)
 		http.Error(w, "Ошибка сервера", http.StatusInternalServerError)
