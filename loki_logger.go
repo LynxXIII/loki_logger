@@ -209,13 +209,20 @@ func (l *LokiLogger) Write(p []byte) (n int, err error) {
 	default:
 	}
 
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	l.resetAutoFlushTimer()
+
 	// Add the data to the collected logs.
 	l.logs = append(l.logs, string(p))
 
 	// If the number of logs reaches the batch size, prepare and send them to Loki.
 	if len(l.logs) >= l.cfg.BatchSize {
-		l.Flush()
+		if l != nil && l.conn != nil && len(l.logs) > 0 {
+			l.prepareLogs()
+			l.logs = l.logs[:0]
+		}
 	}
 
 	fmt.Println(strings.TrimSpace(string(p)))
