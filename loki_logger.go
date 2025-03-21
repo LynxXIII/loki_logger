@@ -167,7 +167,9 @@ func (l *LokiLogger) sendLogs(data map[string][][2]string) {
 		return
 	}
 
-	req.Header.Set("Authorization", "Bearer "+l.cfg.AccessToken)
+	if l.cfg.AccessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+l.cfg.AccessToken)
+	}
 
 	var resp *http.Response
 
