@@ -114,8 +114,16 @@ func (l *LokiLogger) prepareLogs() {
 
 		level := "info"
 
-		if strings.Contains(strings.ToLower(val), "error") || strings.Contains(val, "❌") {
+		if strings.Contains(val, "ERROR") {
 			level = "error"
+		}
+
+		if strings.Contains(val, "WARN") {
+			level = "warn"
+		}
+
+		if strings.Contains(val, "DEBUG") {
+			level = "debug"
 		}
 
 		if _, exists := data[level]; !exists {
@@ -142,7 +150,7 @@ func (l *LokiLogger) sendLogs(data map[string][][2]string) {
 	var err error
 
 	streams := make(map[string][]LokiStream)
-	streams["streams"] = make([]LokiStream, len(data))
+	streams["streams"] = make([]LokiStream, 0, len(data))
 	for k, v := range data {
 		streams["streams"] = append(streams["streams"], LokiStream{
 			Stream: map[string]string{

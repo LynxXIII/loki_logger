@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -51,9 +52,11 @@ func main() {
 
 	log.Println("1. Starting service...")
 	log.Println("2. This is a sample log message.")
-	log.Println("3. This is a 'error' log message.")
-	log.Println("4. ❌ Another log message.")
-	log.Println("5. Another log message with more details.")
+	log.Println("3. Another log message with more details.")
+	slog.Error("4. Error log message")
+	slog.Debug("5. Debug log message")
+	slog.Info("6. Info log message")
+	slog.Warn("7. Warn log message")
 
 	<-ctx.Done()
 	log.Println("Exit")
