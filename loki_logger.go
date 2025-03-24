@@ -114,16 +114,23 @@ func (l *LokiLogger) prepareLogs() {
 
 		level := "info"
 
+		if strings.Contains(val, "INFO") {
+			val = strings.Replace(val, "INFO ", "", 1)
+		}
+
 		if strings.Contains(val, "ERROR") {
 			level = "error"
+			val = strings.Replace(val, "ERROR ", "", 1)
 		}
 
 		if strings.Contains(val, "WARN") {
 			level = "warn"
+			val = strings.Replace(val, "WARN ", "", 1)
 		}
 
 		if strings.Contains(val, "DEBUG") {
 			level = "debug"
+			val = strings.Replace(val, "DEBUG ", "", 1)
 		}
 
 		if _, exists := data[level]; !exists {
