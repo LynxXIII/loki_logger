@@ -182,6 +182,8 @@ func (l *LokiLogger) sendLogs(data map[string][][2]string) {
 		return
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+
 	if l.cfg.AccessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+l.cfg.AccessToken)
 	}
@@ -190,14 +192,16 @@ func (l *LokiLogger) sendLogs(data map[string][][2]string) {
 
 	for attempt := 1; attempt <= l.cfg.RetryCount; attempt++ {
 		resp, err = l.client.Do(req)
-		if err == nil && resp.StatusCode < 500 {
-			break
+		if err == nil {
+			if resp.StatusCode < 500 {
+				defer resp.Body.Close()
+				break
+			}
+
+			resp.Body.Close()
 		}
 
 		log.Printf("Попытка %d не удалась: %v", attempt, err)
-		if resp != nil {
-			resp.Body.Close()
-		}
 
 		time.Sleep(1 * time.Second * time.Duration(attempt))
 	}
