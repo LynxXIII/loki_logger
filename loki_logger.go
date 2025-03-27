@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +45,10 @@ type LokiLogger struct {
 
 // Initializes.
 func Init(ctx context.Context, cfg Config) error {
+	if err := checkUrl(cfg.URL); err != nil {
+		return err
+	}
+
 	// Configure log flags for standard flags, timestamp, and file short name.
 	log.SetFlags(log.LstdFlags | log.LUTC | log.Lmicroseconds | log.Lshortfile)
 
@@ -71,6 +77,22 @@ func Init(ctx context.Context, cfg Config) error {
 
 	// Set the LokiLogger as the output destination for the standard log package.
 	log.SetOutput(l)
+
+	return nil
+}
+
+func checkUrl(rawURL string) error {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+
+	address := net.JoinHostPort(parsedURL.Host, parsedURL.Port())
+	conn, err := net.DialTimeout("tcp", address, 2*time.Second)
+	if err != nil {
+		return err
+	}
+	conn.Close()
 
 	return nil
 }

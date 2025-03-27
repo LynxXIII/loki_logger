@@ -7,7 +7,6 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
 
 	lokilogger "github.com/LynxXIII/loki_logger"
@@ -46,8 +45,7 @@ func main() {
 	}
 
 	if err := lokilogger.Init(ctx, cfg); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+		slog.Error(err.Error())
 	}
 
 	log.Println("1. Starting service...")
