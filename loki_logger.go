@@ -82,6 +82,10 @@ func Init(ctx context.Context, cfg Config) error {
 }
 
 func checkUrl(rawURL string) error {
+	if strings.Contains(rawURL, "internal") || strings.Contains(rawURL, "localhost") {
+		return nil
+	}
+
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return err
